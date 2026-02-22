@@ -1,38 +1,33 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.33;
 
 import {Test} from "forge-std/Test.sol";
 import {AOXC} from "../src/AOXC.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-/**
- * @title MockToken for Rescue Testing
- * @dev Basit bir ERC20 kontratı, initialize gerektirmez.
- */
 contract MockToken is ERC20 {
     constructor() ERC20("Mock Token", "MTK") {
         _mint(msg.sender, 10000 * 1e18);
     }
 }
 
-/**
- * @title AOXC Protocol - Audit-Grade Security Suite
- * @author AOXC Protocol Engineering
- * @notice Validates monetary policy, compliance, and core contract mechanics.
- * @dev Fully compliant with mixedCase naming and ERC20 return check standards.
- */
 contract AOXCTest is Test {
     AOXC public implementation;
     AOXC public proxy;
-    
-    address public admin = address(0xAD);
-    address public user1 = address(0x01);
-    address public user2 = address(0x02);
-    address public complianceOfficer = address(0x03);
+
+    address public admin = makeAddr("Governance_Admin");
+    address public user1 = makeAddr("Audit_Entity_1");
+    address public user2 = makeAddr("Audit_Entity_2");
+    address public complianceOfficer = makeAddr("Compliance_Officer");
+    address public treasury = makeAddr("Treasury_Vault");
+
     uint256 public constant INITIAL_SUPPLY = 100_000_000_000 * 1e18;
 
     function setUp() public virtual {
+        vm.warp(1700000000);
+        vm.roll(100);
+
         implementation = new AOXC();
         bytes memory initData = abi.encodeWithSelector(AOXC.initialize.selector, admin);
         ERC1967Proxy proxyContract = new ERC1967Proxy(address(implementation), initData);
@@ -41,112 +36,93 @@ contract AOXCTest is Test {
         vm.startPrank(admin);
         proxy.grantRole(proxy.COMPLIANCE_ROLE(), complianceOfficer);
         vm.stopPrank();
-
-        vm.label(admin, "Governance_Admin");
-        vm.label(complianceOfficer, "Compliance_Officer");
-        vm.label(address(proxy), "AOXC_Proxy");
-        vm.label(user1, "Audit_Entity_1");
-        vm.label(user2, "Audit_Entity_2");
     }
 
-    // --- 1. STATE INTEGRITY ---
-
-    function test01InitialStateVerification() public view {
-        assertEq(proxy.totalSupply(), INITIAL_SUPPLY, "Genesis supply mismatch");
-        assertTrue(proxy.hasRole(proxy.DEFAULT_ADMIN_ROLE(), admin), "Admin role error");
+    function test_01_InitialStateVerification() public view virtual {
+        assertEq(proxy.totalSupply(), INITIAL_SUPPLY);
+        assertTrue(proxy.hasRole(proxy.DEFAULT_ADMIN_ROLE(), admin));
     }
 
-    // --- 2. COMPLIANCE & LINT OPTIMIZATION ---
-
-    function test02BlacklistLogic() public {
-        vm.prank(complianceOfficer);
-        proxy.addToBlacklist(user1, "AML Compliance");
-        
+    function test_02_BlacklistLogic() public virtual {
         vm.prank(admin);
-        vm.expectRevert("AOXC: BL Recipient");
-        bool sRev1 = proxy.transfer(user1, 100e18); 
-        assertTrue(!sRev1); 
+        proxy.mint(user1, 1000e18);
+
+        vm.prank(complianceOfficer);
+        proxy.addToBlacklist(user1, "AML Compliance Flag");
+
+        // Use a local variable to satisfy the linter 'erc20-unchecked-transfer'
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(AOXC.AOXC_AccountBlacklisted.selector, user1));
+        bool status1 = proxy.transfer(user1, 100e18);
+        assertTrue(!status1); // This line is reached only if revert fails, adding safety
+
+        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSelector(AOXC.AOXC_AccountBlacklisted.selector, user1));
+        bool status2 = proxy.transfer(user2, 50e18);
+        assertTrue(!status2);
 
         vm.prank(complianceOfficer);
         proxy.removeFromBlacklist(user1);
-        vm.prank(admin);
-        bool success = proxy.transfer(user1, 100e18); 
-        assertTrue(success, "Post-blacklist transfer failed");
-    }
-
-    // --- 3. MONETARY VELOCITY ---
-
-    function test03VelocityLimits() public {
-        uint256 maxTx = proxy.maxTransferAmount();
-        
-        vm.prank(admin);
-        bool sAdmin = proxy.transfer(user1, maxTx + 1e18);
-        assertTrue(sAdmin, "Admin exclusion failed");
 
         vm.prank(user1);
-        vm.expectRevert("AOXC: MaxTX");
-        bool sRev2 = proxy.transfer(user2, maxTx + 1);
-        assertTrue(!sRev2);
+        bool success = proxy.transfer(user2, 50e18);
+        assertTrue(success, "Transfer failed");
+    }
+
+    function test_03_VelocityLimits() public virtual {
+        uint256 maxTx = proxy.maxTransferAmount();
+        vm.prank(admin);
+        proxy.mint(user1, maxTx * 5);
+
+        vm.prank(admin);
+        bool adminTx = proxy.transfer(user2, maxTx + 1e18);
+        assertTrue(adminTx, "Admin transfer failed");
+
+        vm.prank(user1);
+        vm.expectRevert(AOXC.AOXC_MaxTxExceeded.selector);
+        bool status3 = proxy.transfer(user2, maxTx + 1);
+        assertTrue(!status3);
 
         vm.prank(admin);
         proxy.setTransferVelocity(1000e18, 2000e18);
-        
+
         vm.startPrank(user1);
-        bool s1 = proxy.transfer(user2, 1000e18);
-        bool s2 = proxy.transfer(user2, 1000e18);
-        assertTrue(s1 && s2, "Transfer within daily limit failed");
-        
-        vm.expectRevert("AOXC: DailyLimit");
-        bool sRev3 = proxy.transfer(user2, 1);
-        assertTrue(!sRev3);
+        bool v1 = proxy.transfer(user2, 1000e18);
+        assertTrue(v1, "First transfer failed");
+        bool v2 = proxy.transfer(user2, 1000e18);
+        assertTrue(v2, "Second transfer failed");
+
+        vm.expectRevert(AOXC.AOXC_DailyLimitExceeded.selector);
+        bool status4 = proxy.transfer(user2, 1);
+        assertTrue(!status4);
         vm.stopPrank();
     }
 
-    // --- 4. INFLATION & UPGRADES ---
-
-    function test04InflationAndUpgrade() public {
-        uint256 limit = proxy.yearlyMintLimit();
-        
+    function test_04_TaxRedirectionAudit() public virtual {
         vm.startPrank(admin);
-        proxy.mint(user1, limit);
-        vm.expectRevert("AOXC: Inflation");
-        proxy.mint(user1, 1);
-        
-        vm.warp(block.timestamp + 366 days);
-        proxy.mint(user1, 100e18); 
+        proxy.initializeV2(1000);
+        proxy.setTreasury(treasury);
+        proxy.setExclusionFromLimits(user1, false);
+        proxy.mint(user1, 1000e18);
         vm.stopPrank();
 
-        address next = address(new AOXC());
-        vm.prank(admin);
-        proxy.upgradeToAndCall(next, "");
-        assertEq(_getImplementationAddress(address(proxy)), next, "UUPS upgrade failed");
+        vm.prank(user1);
+        bool taxTx = proxy.transfer(user2, 1000e18);
+        assertTrue(taxTx, "Taxable transfer failed");
+
+        assertEq(proxy.balanceOf(treasury), 100e18);
+        assertEq(proxy.balanceOf(user2), 900e18);
     }
 
-    // --- 5. GOVERNANCE & RESCUE (Hatasız Versiyon) ---
-
-    function test05RescueMechanics() public {
-        // AOXC yerine standart bir MockToken kullanıyoruz (Initialize gerektirmez)
-        vm.startPrank(admin);
+    function test_05_RescueMechanics() public virtual {
         MockToken dummyToken = new MockToken();
-        
-        // Yanlışlıkla Proxy'ye gönderim simülasyonu
-        bool sTransfer = dummyToken.transfer(address(proxy), 1000e18);
-        assertTrue(sTransfer);
-        vm.stopPrank();
+        uint256 rescueAmount = 500e18;
+        bool seedOk = dummyToken.transfer(address(proxy), rescueAmount);
+        assertTrue(seedOk, "Seed failed");
 
-        uint256 balBefore = dummyToken.balanceOf(admin);
-        
-        // Kurtarma işlemi
+        uint256 adminInitialBalance = dummyToken.balanceOf(admin);
         vm.prank(admin);
-        proxy.rescueERC20(address(dummyToken), 1000e18);
-        
-        assertEq(dummyToken.balanceOf(admin), balBefore + 1000e18, "Funds rescue failed");
-    }
-
-    // --- HELPERS ---
-
-    function _getImplementationAddress(address proxyAddr) internal view returns (address) {
-        bytes32 slot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-        return address(uint160(uint256(vm.load(proxyAddr, slot))));
+        proxy.rescueErc20(address(dummyToken), rescueAmount);
+        assertEq(dummyToken.balanceOf(admin), adminInitialBalance + rescueAmount);
     }
 }

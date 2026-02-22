@@ -7,65 +7,61 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 
 /**
  * @title AOXC Deployment Script
- * @author AOXC Protocol Engineering
- * @notice Handles the orchestration of UUPS Proxy deployment for the AOXC Token.
+ * @dev Handles UUPS Proxy pattern with high-fidelity logging.
  */
 contract DeployAOXC is Script {
-    // Structural state variables for deployment tracking
     address public implementationAddress;
     address public proxyAddress;
     address public governor;
+    uint256 private deployerPrivateKey;
 
+    /**
+     * @notice Manual override for testing environments.
+     */
+    function setDeploymentContext(address _governor, uint256 _privateKey) external {
+        governor = _governor;
+        deployerPrivateKey = _privateKey;
+    }
+
+    /**
+     * @notice Main execution entry point.
+     * @return proxyAddr The EIP-1967 Proxy address.
+     */
     function run() external returns (address) {
-        // --- 1. Environment Configuration ---
-        // Prioritize environment variables for security and CI/CD flexibility.
-        // Falls back to a default only for local testing environments.
-        governor = vm.envOr("GOVERNOR_ADDRESS", 0x20c0DD8B6559912acfAC2ce061B8d5b19Db8CA84);
-        
-        uint256 deployerPrivateKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
+        // --- Setup Logic Branches ---
+        if (governor == address(0)) {
+            governor = vm.envOr("GOVERNOR_ADDRESS", address(0));
+            require(governor != address(0), "CRITICAL: Governor address missing");
+        }
 
-        console2.log("Initiating AOXC Protocol Deployment...");
-        console2.log("Target Governor/Multisig:", governor);
-        console2.log("Network Chain ID:", block.chainid);
+        if (deployerPrivateKey == 0) {
+            deployerPrivateKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
+        }
 
-        // --- 2. Execution ---
+        // --- Broadcast Operations ---
         vm.startBroadcast(deployerPrivateKey);
 
-        // Phase A: Deploy Logic Infrastructure (Implementation)
+        // 1. Deploy Implementation
         AOXC implementation = new AOXC();
         implementationAddress = address(implementation);
-        
-        // Phase B: Prepare Initialization Payload
-        // Using the selector for type-safe interaction with the implementation
-        bytes memory initData = abi.encodeWithSelector(
-            AOXC.initialize.selector,
-            governor
-        );
 
-        // Phase C: Deploy Programmable Proxy (ERC-1967)
-        // This establishes the permanent address for the AOXC token.
+        // 2. Prepare Initialization Call
+        bytes memory initData = abi.encodeWithSelector(AOXC.initialize.selector, governor);
+
+        // 3. Deploy Proxy
         ERC1967Proxy proxy = new ERC1967Proxy(implementationAddress, initData);
         proxyAddress = address(proxy);
 
         vm.stopBroadcast();
 
-        // --- 3. Deployment Validation & Logging ---
-        _printDeploymentSummary();
-
+        _printAuditLogs();
         return proxyAddress;
     }
 
-    /**
-     * @dev Internal helper for professional console reporting.
-     */
-    function _printDeploymentSummary() internal view {
-        console2.log("\n-----------------------------------------");
-        console2.log("AOXC DEPLOYMENT SUCCESSFUL");
-        console2.log("-----------------------------------------");
-        console2.log("Proxy (Main Address): ", proxyAddress);
-        console2.log("Implementation Logic: ", implementationAddress);
-        console2.log("Governance/Admin:     ", governor);
-        console2.log("Standard:             UUPS (ERC-1967)");
-        console2.log("-----------------------------------------\n");
+    function _printAuditLogs() internal view {
+        console2.log(">>> DEPLOYMENT SUCCESSFUL <<<");
+        console2.log("- Proxy: ", proxyAddress);
+        console2.log("- Logic: ", implementationAddress);
+        console2.log("- Admin: ", governor);
     }
 }

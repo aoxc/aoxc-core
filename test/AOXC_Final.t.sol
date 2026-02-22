@@ -115,7 +115,6 @@ contract AOXCFinalAuditTest is AOXCCoverageTest {
         assertTrue(s1, "Transfer failed");
 
         // 4. Path: Excluded Transfer (admin is excluded)
-        // Covers: !isExcludedFromLimits[from] being false
         vm.prank(admin);
         bool s2 = proxy.transfer(user2, 100e18);
         assertTrue(s2, "Excluded transfer failed");
@@ -124,6 +123,30 @@ contract AOXCFinalAuditTest is AOXCCoverageTest {
         vm.prank(user2);
         bool s3 = proxy.transfer(user2, 10e18);
         assertTrue(s3, "Self-transfer failed");
+    }
+
+    /**
+     * @notice Final touch for 100% coverage.
+     * @dev Covers the 'periods == 0' branch and unauthorized upgrade attempts.
+     */
+    function testFinalMissingSegments() public {
+        // 1. Branch: Minting within the first year (periods == 0)
+        // Ensure no time warp happens before this call
+        vm.prank(admin);
+        proxy.mint(user2, 500e18);
+
+        // 2. Branch: Failed Authorization Upgrade
+        // This hits the 'onlyOwner' revert path inside _authorizeUpgrade
+        vm.startPrank(user1);
+        address newDummyImpl = address(new AOXC());
+        vm.expectRevert(); 
+        proxy.upgradeToAndCall(newDummyImpl, "");
+        vm.stopPrank();
+
+        // 3. Branch: Zero amount transfer (Logic edge case)
+        vm.prank(user2);
+        bool success = proxy.transfer(user1, 0);
+        assertTrue(success, "Zero transfer should succeed");
     }
 }
 

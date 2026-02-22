@@ -64,4 +64,4 @@ xlayer_testnet = { key = "${OKLINK_API_KEY}", url = "https://www.oklink.com/api/
 # --- Documentation Generation (NatSpec) ---
 [doc]
 title = "AOXC Protocol Documentation"
-repository = "https://github.com/orcun/AOXCProject"
+repository = "https://github.com/aoxc/aoxc-dao-genesis"

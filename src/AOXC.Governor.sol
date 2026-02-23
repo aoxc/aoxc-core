@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.33;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {GovernorUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/GovernorUpgradeable.sol";
+/**
+ * @title AOXC Sovereign Governor
+ * @author AOXC Core Team
+ * @notice The core decision-making engine. Integrated with Timelock and Preventive modules.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
+ */
+
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { GovernorUpgradeable } from "@openzeppelin/contracts-upgradeable/governance/GovernorUpgradeable.sol";
 import {
     GovernorSettingsUpgradeable
 } from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorSettingsUpgradeable.sol";
@@ -21,17 +28,12 @@ import {
 import {
     GovernorPreventLateQuorumUpgradeable
 } from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorPreventLateQuorumUpgradeable.sol";
-import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {
     TimelockControllerUpgradeable
 } from "@openzeppelin/contracts-upgradeable/governance/TimelockControllerUpgradeable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-/**
- * @title AOXC Sovereign Governor
- * @notice The core decision-making engine. Integrated with Timelock and Preventive modules.
- * @dev Optimized for OpenZeppelin v5. Fixed linearization and enhanced Guardian role.
- */
 contract AOXCGovernor is
     Initializable,
     GovernorUpgradeable,
@@ -46,10 +48,10 @@ contract AOXCGovernor is
     // --- PROTOCOL CONSTANTS ---
     uint48 public constant VOTING_DELAY = 1 days;
     uint32 public constant VOTING_PERIOD = 50400; // Approx 1 week on X Layer
-    uint256 public constant PROPOSAL_THRESHOLD = 50_000 * 1e18; // 50k AOXC to propose
+    uint256 public constant PROPOSAL_THRESHOLD = 50_000 * 1e18;
     uint48 public constant LATE_QUORUM_EXTENSION = 1 days;
 
-    address public guardian; // The Emergency Veto authority
+    address public guardian;
 
     error AOXC_System_Forbidden();
     error AOXC_System_OnlyGuardian();
@@ -67,7 +69,9 @@ contract AOXCGovernor is
         __GovernorVotesQuorumFraction_init(4); // 4% Quorum
         __GovernorTimelockControl_init(_timelock);
         __GovernorPreventLateQuorum_init(LATE_QUORUM_EXTENSION);
-        __UUPSUpgradeable_init();
+
+        // UUPSUpgradeable does not have an internal __init function in OZ v5.
+        // Line removed to fix Error (7576).
 
         guardian = _guardian;
     }
@@ -76,9 +80,6 @@ contract AOXCGovernor is
                             GUARDIAN ACTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Allows the guardian to cancel a malicious proposal before execution.
-     */
     function guardianCancel(
         address[] memory targets,
         uint256[] memory values,
@@ -86,8 +87,6 @@ contract AOXCGovernor is
         bytes32 descriptionHash
     ) external {
         if (msg.sender != guardian) revert AOXC_System_OnlyGuardian();
-
-        uint256 proposalId = hashProposal(targets, values, calldatas, descriptionHash);
         _cancel(targets, values, calldatas, descriptionHash);
     }
 
@@ -195,13 +194,21 @@ contract AOXCGovernor is
 
     function _castVote(uint256 proposalId, address account, uint8 support, string memory reason, bytes memory params)
         internal
-        override(GovernorUpgradeable, GovernorPreventLateQuorumUpgradeable)
+        override(GovernorUpgradeable)
         returns (uint256)
     {
         return super._castVote(proposalId, account, support, reason, params);
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override {
+    function _authorizeUpgrade(
+        address /* newImplementation */
+    )
+        internal
+        override
+    {
         if (msg.sender != _executor()) revert AOXC_System_Forbidden();
     }
+
+    // Storage Gap for 100% safe future upgrades
+    uint256[49] private _gap;
 }

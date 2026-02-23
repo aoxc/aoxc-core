@@ -3,8 +3,10 @@ pragma solidity 0.8.33;
 
 /**
  * @title IAOXCGovernor (Sovereign Governance Standard)
+ * @author AOXC Protocol
  * @notice Interface for the AOXC decentralized decision-making engine.
  * @dev Optimized for OpenZeppelin v5.x and EIP-712 signature-based voting.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
 interface IAOXCGovernor {
     enum ProposalState {
@@ -39,7 +41,7 @@ interface IAOXCGovernor {
     event ProposalQueued(uint256 indexed proposalId, uint256 eta);
 
     /*//////////////////////////////////////////////////////////////
-                            VIEW FUNCTIONS
+                                VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     function state(uint256 proposalId) external view returns (ProposalState);
@@ -55,7 +57,7 @@ interface IAOXCGovernor {
     function proposalThreshold() external view returns (uint256);
 
     /*//////////////////////////////////////////////////////////////
-                            CORE LOGIC
+                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
     function propose(
@@ -84,7 +86,7 @@ interface IAOXCGovernor {
     ) external returns (uint256 proposalId);
 
     /*//////////////////////////////////////////////////////////////
-                            VOTING ENGINE
+                                VOTING ENGINE
     //////////////////////////////////////////////////////////////*/
 
     function castVote(uint256 proposalId, uint8 support) external returns (uint256 weight);

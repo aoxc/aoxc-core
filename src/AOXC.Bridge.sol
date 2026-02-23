@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.33;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {
-    ReentrancyGuardUpgradeable
-} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-
 /**
  * @title AOXC Fortress Bridge V2
+ * @author AOXC Core Team
  * @notice High-performance omnichain bridge manager with rate-limiting.
- * @dev Optimized with OZ v5 and EIP-1153 Transient Storage.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
+
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+
 contract AOXCBridge is
     Initializable,
     AccessControlUpgradeable,
@@ -24,6 +25,7 @@ contract AOXCBridge is
     UUPSUpgradeable
 {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
 
     // --- ROLES ---
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
@@ -68,9 +70,9 @@ contract AOXCBridge is
         }
 
         __AccessControl_init();
-        __ReentrancyGuardTransient_init();
+        __ReentrancyGuard_init();
         __Pausable_init();
-        __UUPSUpgradeable_init();
+        // UUPSUpgradeable does not have an internal __init function. Removed to fix Error 7576.
 
         aoxcToken = IERC20(_aoxcToken);
 
@@ -119,18 +121,18 @@ contract AOXCBridge is
     function _updateLimit(uint16 _chainId, uint256 _amount, bool isOut) internal {
         ChainConfig storage config = chainConfigs[_chainId];
 
-        if (block.timestamp >= config.lastResetTimestamp + 1 days) {
+        if (block.timestamp >= uint256(config.lastResetTimestamp) + 1 days) {
             config.lastResetTimestamp = uint64(block.timestamp);
             config.currentSpentOut = 0;
             config.currentSpentIn = 0;
         }
 
         if (isOut) {
-            if (config.currentSpentOut + _amount > config.dailyLimitOut) revert AOXC_Bridge_LimitExceeded();
-            config.currentSpentOut += uint128(_amount);
+            if (uint256(config.currentSpentOut) + _amount > config.dailyLimitOut) revert AOXC_Bridge_LimitExceeded();
+            config.currentSpentOut += _amount.toUint128();
         } else {
-            if (config.currentSpentIn + _amount > config.dailyLimitIn) revert AOXC_Bridge_LimitExceeded();
-            config.currentSpentIn += uint128(_amount);
+            if (uint256(config.currentSpentIn) + _amount > config.dailyLimitIn) revert AOXC_Bridge_LimitExceeded();
+            config.currentSpentIn += _amount.toUint128();
         }
     }
 
@@ -156,7 +158,7 @@ contract AOXCBridge is
         _unpause();
     }
 
-    function _authorizeUpgrade(address newImpl) internal override onlyRole(UPGRADER_ROLE) {}
+    function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) { }
 
-    uint256[43] private __gap;
+    uint256[43] private _gap;
 }

@@ -1,26 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.33;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {
-    ReentrancyGuardUpgradeable
-} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-
 /**
  * @title AOXC Sovereign Liquidity & Bridge Vault
+ * @author AOXC Core Team
  * @notice Manages locked LP positions and backs cross-chain synthetic supply.
- * @dev Optimized with Transient Storage for professional asset management.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
-contract AOXCLiquidityManager is
-    Initializable,
-    AccessControlUpgradeable,
-    ReentrancyGuardUpgradeable,
-    UUPSUpgradeable
-{
+
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
+contract AOXCLiquidityManager is Initializable, AccessControlUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
     // --- ROLES ---
@@ -55,8 +50,10 @@ contract AOXCLiquidityManager is
         }
 
         __AccessControl_init();
-        __ReentrancyGuardTransient_init();
-        __UUPSUpgradeable_init();
+        __ReentrancyGuard_init();
+
+        // UUPSUpgradeable v5+ does not have an internal __init function.
+        // __UUPSUpgradeable_init(); satırı hata (7576) verdiği için kaldırıldı.
 
         aoxcToken = _aoxcToken;
         currentLpToken = _lpToken;
@@ -94,18 +91,12 @@ contract AOXCLiquidityManager is
                             BRIDGE VAULT LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Locks tokens in this vault to enable minting on another chain.
-     */
     function bridgeOut(uint16 _dstChainId, address _from, uint256 _amount) external onlyRole(BRIDGE_ROLE) nonReentrant {
         if (_from == address(0)) revert AOXC_Bridge_ZeroAddress();
         IERC20(aoxcToken).safeTransferFrom(_from, address(this), _amount);
         emit BridgeOut(_dstChainId, _from, _amount);
     }
 
-    /**
-     * @notice Releases tokens from this vault when tokens are burned on another chain.
-     */
     function bridgeIn(uint16 _srcChainId, address _to, uint256 _amount) external onlyRole(BRIDGE_ROLE) nonReentrant {
         if (_to == address(0)) revert AOXC_Bridge_ZeroAddress();
         if (IERC20(aoxcToken).balanceOf(address(this)) < _amount) revert AOXC_Bridge_InsufficientCollateral();
@@ -118,7 +109,7 @@ contract AOXCLiquidityManager is
                             UPGRADEABILITY
     //////////////////////////////////////////////////////////////*/
 
-    function _authorizeUpgrade(address newImpl) internal override onlyRole(UPGRADER_ROLE) {}
+    function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) { }
 
-    uint256[47] private __gap;
+    uint256[47] private _gap;
 }

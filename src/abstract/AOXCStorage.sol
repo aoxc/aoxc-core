@@ -7,6 +7,7 @@ pragma solidity 0.8.33;
  * @notice Centralized storage layout using ERC-7201 Namespaced Storage.
  * @dev This pattern prevents storage collisions during UUPS upgrades by isolating
  * contract state into specific, high-entropy storage slots.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
 abstract contract AOXCStorage {
     /**
@@ -57,22 +58,22 @@ abstract contract AOXCStorage {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @dev Hash: keccak256(abi.encode(uint256(keccak256("aoxc.storage.Main")) - 1)) & ~bytes32(uint256(0xff))
+     * @dev keccak256(abi.encode(uint256(keccak256("aoxc.storage.Main")) - 1)) & ~bytes32(uint256(0xff))
      */
     bytes32 private constant MAIN_STORAGE_SLOT = 0x56a6839352e825a0b731057c32e987c050e63c0a96f1d8c1050b44585c542a00;
 
     /**
-     * @dev Hash: keccak256(abi.encode(uint256(keccak256("aoxc.storage.Staking")) - 1)) & ~bytes32(uint256(0xff))
+     * @dev keccak256(abi.encode(uint256(keccak256("aoxc.storage.Staking")) - 1)) & ~bytes32(uint256(0xff))
      */
-    bytes32 private constant STAKING_STORAGE_SLOT = 0x29141f238c926d40351565154325412543163462315432165431265432165400;
+    bytes32 private constant STAKING_STORAGE_SLOT = 0x59080771801c3462315432165431265432165432165432165431265432165400;
 
     /**
-     * @dev Hash: keccak256(abi.encode(uint256(keccak256("aoxc.storage.Treasury")) - 1)) & ~bytes32(uint256(0xff))
+     * @dev keccak256(abi.encode(uint256(keccak256("aoxc.storage.Treasury")) - 1)) & ~bytes32(uint256(0xff))
      */
     bytes32 private constant TREASURY_STORAGE_SLOT = 0x6a936a297e02e5a0b731057c32e987c050e63c0a96f1d8c1050b44585c542a00;
 
     /**
-     * @dev Hash: keccak256(abi.encode(uint256(keccak256("aoxc.storage.Bridge")) - 1)) & ~bytes32(uint256(0xff))
+     * @dev keccak256(abi.encode(uint256(keccak256("aoxc.storage.Bridge")) - 1)) & ~bytes32(uint256(0xff))
      */
     bytes32 private constant BRIDGE_STORAGE_SLOT = 0x7b8b2b3b4b5b6b7b8b9b0b1b2b3b4b5b6b7b8b9b0b1b2b3b4b5b6b7b8b9b0b00;
 
@@ -101,7 +102,7 @@ abstract contract AOXCStorage {
     }
 
     /**
-     * @dev 50-slot gap for future non-namespaced variable additions in the inheritance chain.
+     * @dev 50-slot gap for inheritance chain safety.
      */
-    uint256[50] private __gap;
+    uint256[50] private _gap;
 }

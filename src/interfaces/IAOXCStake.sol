@@ -6,6 +6,7 @@ pragma solidity 0.8.33;
  * @author AOXC Protocol
  * @notice Interface for the tiered, deflationary staking system.
  * @dev Defines the interaction logic for users, governors, and external integrators.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
 interface IAOXCStake {
     /**

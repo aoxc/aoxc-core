@@ -3,8 +3,10 @@ pragma solidity 0.8.33;
 
 /**
  * @title IAOXCTreasury (Sovereign Finance Standard)
+ * @author AOXC Protocol
  * @notice Interface for the AOXC DAO Treasury with 6-year cliff and 6% annual caps.
  * @dev Standardized for interaction with Governor and Security Registry.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
 interface IAOXCTreasury {
     /*//////////////////////////////////////////////////////////////
@@ -31,7 +33,7 @@ interface IAOXCTreasury {
     /**
      * @notice Withdraws Native ETH within the 6% annual limit.
      */
-    function withdrawETH(address payable to, uint256 amount) external;
+    function withdrawEth(address payable to, uint256 amount) external;
 
     /**
      * @notice Opens the next 1-year spending window after cliff or expiry.

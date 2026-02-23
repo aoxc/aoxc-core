@@ -3,7 +3,10 @@ pragma solidity 0.8.33;
 
 /**
  * @title IAOXCBridge (Omnichain Standard)
+ * @author AOXC Protocol
  * @notice Interface for secure, rate-limited cross-chain operations.
+ * @dev Designed to support LayerZero or custom relayer patterns with high-fidelity tracking.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
 interface IAOXCBridge {
     /*//////////////////////////////////////////////////////////////
@@ -47,10 +50,18 @@ interface IAOXCBridge {
 
     /**
      * @notice Returns remaining daily limit for a specific chain.
+     * @param _chainId The ID of the chain to check.
+     * @param isOut True for outgoing (bridgeOut), False for incoming (bridgeIn).
      */
     function getRemainingLimit(uint16 _chainId, bool isOut) external view returns (uint256);
 
+    /**
+     * @notice Checks if a specific chain ID is whitelisted.
+     */
     function isChainSupported(uint16 _chainId) external view returns (bool);
 
+    /**
+     * @notice Checks if a message has already been processed to prevent double-spending.
+     */
     function processedMessages(bytes32 _messageId) external view returns (bool);
 }

@@ -9,14 +9,11 @@ script = "script"
 # --- Compiler Configuration ---
 solc_version = "0.8.33"
 optimizer = true
-# 300'den 1'e indirildi. 
-# Bu, "Initcode size exceeds 49152" hatasını çözmek için en etkili yöntemdir.
-optimizer_runs = 1  
+optimizer_runs = 1
 via_ir = true
 evm_version = "cancun"
 
-# --- Bytecode Optimization (Boyutu Küçültmek İçin Eklenenler) ---
-# Metadata'yı devre dışı bırakmak kontrat boyutundan ciddi tasarruf sağlar.
+# --- Bytecode Optimization ---
 bytecode_hash = "none"
 cbor_metadata = false
 
@@ -31,8 +28,20 @@ extra_output = [
 ]
 
 # --- Linting & Warnings ---
-# 3860: Initcode size uyarısını tamamen gizlemek istersen listeye ekleyebilirsin.
+# 1878: SPDX license identifier not provided in source file
+# 5574: Function state mutability can be restricted to pure
+# 2018: Function state mutability can be restricted to view
+# 3860: Initcode size exceeds 49152 bytes (X Layer deployment fix)
 ignored_error_codes = [1878, 5574, 2018, 3860]
+
+# --- Formatter Configuration ---
+[fmt]
+line_length = 120
+bracket_spacing = true
+ignore = ["src/AOXC.sol"]
+
+[profile.default.fmt]
+mixed_case_function = true
 
 # --- Advanced Testing Strategies ---
 [fuzz]
@@ -43,25 +52,11 @@ seed = '0x31337'
 runs = 500
 depth = 15
 
-# --- Coverage Configuration ---
-coverage_exclusions = [
-    "test/**",
-    "script/**",
-    "test/utils/ERC20Assertions.sol"
-]
-
-# CI (Continuous Integration) profilinde de optimizer'ı açık tutalım ki boyut hatası testleri durdurmasın.
+# --- CI/CD Profile ---
 [profile.ci]
 optimizer = true
 optimizer_runs = 1
 via_ir = true
-
-# --- Dependency Management ---
-remappings = [
-    "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
-    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
-    "forge-std/=lib/forge-std/src/"
-]
 
 # --- Infrastructure & Connectivity ---
 [rpc_endpoints]
@@ -70,9 +65,7 @@ xlayer_testnet = "https://testnet.xlayer.tech/rpc"
 
 [etherscan]
 xlayer = { key = "${OKLINK_API_KEY}", url = "https://www.oklink.com/api/v5/explorer/contract/verify-source-code-plugin/xlayer" }
-xlayer_testnet = { key = "${OKLINK_API_KEY}", url = "https://www.oklink.com/api/v5/explorer/contract/verify-source-code-plugin/xlayer" }
 
 [doc]
 title = "AOXC Protocol Documentation"
-repository = "https://github.com/aoxc/aoxc-dao-genesis"
-solc_version = "0.8.33"
+repository = "https://github.com/aoxc/AOXC-Core"

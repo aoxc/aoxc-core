@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.33;
+
+import "../src/libraries/AOXCErrors.sol";
+
+/**
+ * @dev This contract is only for testing AOXCErrors functionality.
+ * It allows the test suite to trigger specific errors.
+ */
+contract ErrorTester {
+    function triggerUnauthorized() external pure {
+        revert AOXCErrors.AOXC_Unauthorized();
+    }
+
+    function triggerInvalidBPS() external pure {
+        revert AOXCErrors.AOXC_InvalidBPS();
+    }
+    
+    // Add other triggers as needed for full coverage
+}

@@ -7,6 +7,7 @@ pragma solidity 0.8.33;
  * @notice Centralized library for all protocol-wide custom errors.
  * @dev Using custom errors instead of strings saves significant gas and provides
  * clear failure categories for off-chain tools.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
 library AOXCErrors {
     /*//////////////////////////////////////////////////////////////

@@ -3,8 +3,10 @@ pragma solidity 0.8.33;
 
 /**
  * @title IAOXC (Sovereign Interface)
+ * @author AOXC Protocol
  * @notice Unified interface for the AOXC Token, combining ERC20, Votes, Permit, and Governance.
  * @dev Optimized for OpenZeppelin v5.x compatibility.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
 interface IAOXC {
     /*//////////////////////////////////////////////////////////////

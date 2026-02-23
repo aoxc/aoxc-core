@@ -7,6 +7,7 @@ pragma solidity 0.8.33;
  * @notice Centralized repository for all fixed parameters, roles, and thresholds.
  * @dev Storing constants in a library reduces deployment costs and ensures
  * mathematical consistency across the entire AOXC ecosystem.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
 library AOXCConstants {
     /*//////////////////////////////////////////////////////////////

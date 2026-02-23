@@ -6,6 +6,7 @@ pragma solidity 0.8.33;
  * @author AOXC Protocol
  * @notice Interface for the AOXC Timelock controller.
  * @dev Standardized interface for Governance to queue and execute delayed transactions.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
 interface IAOXCTimelock {
     /*//////////////////////////////////////////////////////////////

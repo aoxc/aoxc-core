@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.33;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {
-    ReentrancyGuardUpgradeable
-} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-
 /**
  * @title AOXC Sovereign Treasury V2
+ * @author AOXC Core Team
  * @notice Advanced vault with 6-year cliff and 6% annual rolling limits.
- * @dev Optimized with OZ v5 Transient Storage for gas efficiency and DAO alignment.
+ * @custom:repository https://github.com/aoxc/AOXC-Core
  */
+
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
 contract AOXCTreasury is
     Initializable,
     AccessControlUpgradeable,
@@ -70,8 +70,10 @@ contract AOXCTreasury is
 
         __AccessControl_init();
         __Pausable_init();
-        __ReentrancyGuardTransient_init();
-        __UUPSUpgradeable_init();
+        __ReentrancyGuard_init();
+
+        // UUPSUpgradeable v5+ does not require a __init call.
+        // __UUPSUpgradeable_init(); satırı kaldırıldı.
 
         _grantRole(DEFAULT_ADMIN_ROLE, governor);
         _grantRole(GOVERNANCE_ROLE, governor);
@@ -85,16 +87,11 @@ contract AOXCTreasury is
                             WINDOW MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Increments the window ID and resets the 1-year timer.
-     * @dev Only callable after the 6-year cliff or after the previous window expires.
-     */
     function openNextWindow() external onlyRole(GOVERNANCE_ROLE) {
         if (block.timestamp < initialUnlockTimestamp) {
             revert AOXC_Vault_Locked(block.timestamp, initialUnlockTimestamp);
         }
 
-        // Ensure the previous window has actually expired
         if (block.timestamp <= currentWindowEnd) revert AOXC_Vault_WindowClosed();
 
         currentWindowId++;
@@ -117,14 +114,14 @@ contract AOXCTreasury is
         IERC20(token).safeTransfer(to, amount);
     }
 
-    function withdrawETH(address payable to, uint256 amount)
+    function withdrawEth(address payable to, uint256 amount)
         external
         nonReentrant
         onlyRole(GOVERNANCE_ROLE)
         whenNotPaused
     {
         _processWithdrawal(address(0), to, amount);
-        (bool success,) = to.call{value: amount}("");
+        (bool success,) = to.call{ value: amount }("");
         if (!success) revert AOXC_Vault_TransferFailed();
     }
 
@@ -139,7 +136,6 @@ contract AOXCTreasury is
 
         WindowAccounting storage acc = windowStates[token][currentWindowId];
 
-        // First withdrawal in this window? Take a snapshot.
         if (acc.startBalance == 0) {
             acc.startBalance = (token == address(0)) ? address(this).balance : IERC20(token).balanceOf(address(this));
         }
@@ -167,7 +163,9 @@ contract AOXCTreasury is
         _unpause();
     }
 
-    function _authorizeUpgrade(address newImpl) internal override onlyRole(UPGRADER_ROLE) {}
+    function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) { }
 
-    receive() external payable {}
+    receive() external payable { }
+
+    uint256[48] private _gap;
 }

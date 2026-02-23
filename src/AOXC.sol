@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.33;
 
+/**
+ * @title AOXC Sovereign Token
+ * @author AOXC Core
+ * @notice Enterprise-grade UUPS upgradeable token with Tier-1 security features.
+ * @dev Full integration of EIP-6372 and OpenZeppelin v4.x/v5.x Hybrid Governance.
+ */
+
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {ERC20BurnableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
@@ -13,13 +20,6 @@ import {VotesUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/u
 import {NoncesUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/NoncesUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-/**
- * @title AOXC Sovereign Token
- * @author AOXC Core
- * @custom:repository https://github.com/aoxc/AOXC-Core
- * @notice Enterprise-grade UUPS upgradeable token with Tier-1 security features.
- * @dev Full integration of EIP-6372 and OpenZeppelin v5.x Extended Governance.
- */
 contract AOXC is
     Initializable,
     ERC20Upgradeable,
@@ -82,6 +82,10 @@ contract AOXC is
         _disableInitializers();
     }
 
+    /**
+     * @notice Initializes the token with governance and supply settings.
+     * @param governor Primary administrative address.
+     */
     function initialize(address governor) external initializer {
         if (governor == address(0)) revert AOXC_ZeroAddress();
 
@@ -112,7 +116,9 @@ contract AOXC is
         _mint(governor, 100_000_000_000 * 1e18);
     }
 
-    // --- Core Overrides ---
+    /*//////////////////////////////////////////////////////////////
+                            CORE LOGIC
+    //////////////////////////////////////////////////////////////*/
 
     function _update(address from, address to, uint256 amount)
         internal
@@ -150,35 +156,22 @@ contract AOXC is
         _transferVotingUnits(from, to, amount);
     }
 
-    function _delegate(address account, address delegatee)
-        internal
-        override(VotesUpgradeable, VotesExtendedUpgradeable)
-    {
-        super._delegate(account, delegatee);
-    }
+    /*//////////////////////////////////////////////////////////////
+                            GOVERNANCE (EIP-6372)
+    //////////////////////////////////////////////////////////////*/
 
-    function _transferVotingUnits(address from, address to, uint256 amount)
-        internal
-        override(VotesUpgradeable, VotesExtendedUpgradeable)
-    {
-        super._transferVotingUnits(from, to, amount);
-    }
-
-    function _getVotingUnits(address account)
-        internal
-        view
-        override(VotesUpgradeable, ERC20VotesUpgradeable)
-        returns (uint256)
-    {
-        return super._getVotingUnits(account);
-    }
-
-    // --- Governance (EIP-6372) ---
-
+    /**
+     * @notice Clock for EIP-6372. Uses Unix timestamp.
+     */
     function clock() public view override returns (uint48) {
         return uint48(block.timestamp);
     }
 
+    /**
+     * @notice Clock mode for EIP-6372.
+     * @dev Solhint Fix: Function name mixedcase disabled for OZ 4.x compatibility.
+     */
+    // solhint-disable-next-line func-name-mixedcase
     function CLOCK_MODE() public pure override returns (string memory) {
         return "mode=timestamp";
     }
@@ -192,7 +185,9 @@ contract AOXC is
         return super.nonces(owner);
     }
 
-    // --- Management ---
+    /*//////////////////////////////////////////////////////////////
+                            MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
 
     function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) whenNotPaused {
         if (to == address(0)) revert AOXC_ZeroAddress();
@@ -259,11 +254,41 @@ contract AOXC is
         return _blacklisted[account];
     }
 
-    function _authorizeUpgrade(address)
+    /*//////////////////////////////////////////////////////////////
+                            INTERNAL HELPERS
+    //////////////////////////////////////////////////////////////*/
+
+    function _authorizeUpgrade(address /* newImplementation */)
         internal
         override
         onlyRole(UPGRADER_ROLE)
     {}
 
+    function _delegate(address account, address delegatee)
+        internal
+        override(VotesUpgradeable, VotesExtendedUpgradeable)
+    {
+        super._delegate(account, delegatee);
+    }
+
+    function _transferVotingUnits(address from, address to, uint256 amount)
+        internal
+        override(VotesUpgradeable, VotesExtendedUpgradeable)
+    {
+        super._transferVotingUnits(from, to, amount);
+    }
+
+    function _getVotingUnits(address account)
+        internal
+        view
+        override(VotesUpgradeable, ERC20VotesUpgradeable)
+        returns (uint256)
+    {
+        return super._getVotingUnits(account);
+    }
+
+    /**
+     * @dev Gap for future state variable additions.
+     */
     uint256[43] private _gap;
 }

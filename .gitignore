@@ -1,16 +1,59 @@
 # ==============================================================================
-# AOXC PROTOCOL - GIT IGNORE SPECIFICATION
+# AOXC PROTOCOL - MASTER GIT IGNORE SPECIFICATION
 # ==============================================================================
-cache/
+
+# --- FOUNDRY ARTIFACTS ---
+# Build artifacts and temporary compiler outputs (generated on every build)
 out/
-!/broadcast
-/broadcast/*/31337/
-/broadcast/**/dry-run/
+cache/
+foundry.lock
+
+# --- DEPENDENCIES ---
+# External libraries should be managed via submodules or package managers.
+# Note: Keep lib/ only if you are manually managing source files.
+lib/
+
+# --- SECRETS & ENVIRONMENT ---
+# NEVER COMMIT: Private keys, API keys, and sensitive RPC URLs
 .env
 .env.*
 !.env.example
-docs/
+
+# --- BROADCAST & CHAIN DATA ---
+# On-chain transaction logs (Broadcasts) - Filtering for essential data only
+broadcast/
+!broadcast/*/run-latest.json
+/broadcast/*/31337/
+/broadcast/**/dry-run/
+
+# --- TESTING & REPORTS ---
+# Test results, gas snapshots, and coverage reports
+reports/
+coverage/
+.lcov
+gas-report.txt
+.gas-snapshot
+
+# --- UPGRADE & DEPLOYMENT TEMP ---
+# Temporary JSON logs or deployment state files from upgrade scripts
+upgrade/temp/
+*.log
+
+# --- OS & IDE SPECIFIC ---
+# Operating system metadata and local IDE configurations
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# --- SYSTEM & BUILD ---
+# Node.js artifacts (if using Hardhat, Truffle, or JS-based tooling)
+node_modules/
+dist/
+artifacts/
+
+# ==============================================================================
+# END OF SPECIFICATION
+# ==============================================================================

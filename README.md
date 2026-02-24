@@ -1,50 +1,38 @@
-# 🏛️ AOXC-Core | The Sovereign Engine (V1)
+# 🏛️ AOXC-Core | The Evolution (V1 → V2 Architecture)
 
-**AOXC-Core** is the foundational smart contract architecture of the AOXC ecosystem. This repository contains the **V1 Sovereign Token**, a high-integrity, upgradeable asset designed for the **X LAYER** ecosystem. 
-
-It is built with a "Code as Constitution" philosophy, integrating advanced compliance, monetary velocity controls, and decentralized governance.
+**AOXC-Core** has evolved from a single token contract into a multi-modular **Sovereign Fleet Protocol**. This repository tracks the transition from the deployed `AOXC_v1` to the high-integrity integrated ecosystem on **X LAYER**.
 
 ---
 
-## 🔬 Core Specifications (V1)
-The AOXC contract is not just a token; it is a regulated economic unit featuring:
+## 🚀 The Evolution: Beyond the Token
+We are upgrading the core logic from a standalone asset to a coordinated system of specialized modules ("Sovereign Ships").
 
-* **Network:** Optimized for **X LAYER**.
-* **Protocol:** UUPS Upgradeable (ERC1967).
-* **Security:** Multi-Role Access Control (RBAC).
-* **Standards:** ERC20, Burnable, Pausable, Permit, and Votes (Governance).
+### 🏗️ Fleet Architecture (Current Src Tree)
+The system is now subdivided into specialized protocol layers:
 
----
-
-## 🛠️ Advanced Laboratory Features
-
-### 1. Monetary Velocity Control
-To ensure ecosystem stability, V1 implements transfer limits:
-* **Max Transaction:** Hard-coded safety caps for single transfers.
-* **Daily Velocity:** Rolling 24-hour limits per wallet to prevent flash-drain events.
-
-### 2. Inflation & Minting Guard
-* **Hard Cap:** Controlled inflation via `HARD_CAP_INFLATION_BPS`.
-* **Yearly Threshold:** Minting is restricted by a yearly limit to ensure long-term value preservation.
-
-### 3. Compliance & Safety
-* **Blacklist Engine:** Integrated `COMPLIANCE_ROLE` to restrict malicious actors.
-* **Rescue Mechanism:** Admin ability to rescue accidentally sent tokens (excluding native AOXC).
+* **Core Logic:** `AOXC.sol` (V2) inherits the legacy of `AOXC_v1.sol` with enhanced scalability.
+* **Governance:** `AOXC.Governor.sol` & `AOXC.Timelock.sol` — Establishing the decentralized high council.
+* **Economic Hub:** `AOXC.Stake.sol`, `AOXC.Swap.sol`, & `AOXC.Treasury.sol` — Managing liquidity and sovereign reserves.
+* **Connectivity:** `AOXC.Bridge.sol` — Enabling cross-chain mobility within the X LAYER ecosystem.
+* **Safety & Compliance:** `AOXC.SecurityRegistry.sol` — The forensic record-keeper for fleet-wide security.
 
 ---
 
-## 🧪 Technical Stack
-* **Solidity Version:** `0.8.28`
-* **Framework:** OpenZeppelin Upgradeable
-* **Optimization:** Shanghai / X LAYER ZK-EVM compatible
+## 🛠️ Technical Transformation
+This upgrade implements a **Modular Interface Standard**:
+- **Separation of Concerns:** Moving logic from monolithic contracts to specialized `interfaces/` and `abstract/` layers.
+- **Unified Standards:** Utilizing `libraries/` for centralized error handling (`AOXCErrors`) and constant management (`AOXCConstants`).
+- **Optimization:** Refined for **X LAYER** with Solidity 0.8.28+ standards.
 
 ---
 
-## 🏗️ Development Status: V1 Lifecycle
-This version (V1) serves as the **Genesis Core**. We are currently in the process of auditing and simulating the logic for the upcoming **V2 Evolution**. 
+## 🔬 Development Roadmap
+1.  **V1 Legacy:** Maintaining the deployed `AOXC_v1.sol` state.
+2.  **Module Synthesis:** Integrating the Bridge, Stake, and Treasury engines.
+3.  **Fleet Integration:** Full-scale simulation of `AOXC.Governor` oversight.
 
-> **Research Note:** AOXC-Core maintains strict forensic logging for all `_update` cycles. Every movement is a recorded state in the sovereign history.
+> **Operational Note:** AOXC-Core is shifting from a "Token" to a "Protocol". The fleet is initializing.
 
 ---
 
-**[AOXC-CORE] orcun@ns1:~/AOXC-Core$** _System Status: **V1-STABLE** | Network: **X LAYER**_
+**[AOXC-CORE] orcun@ns1:~/AOXC-Core/src$** _System Status: **EVOLVING** | Modules: **19 FILES DETECTED** | Network: **X LAYER**_

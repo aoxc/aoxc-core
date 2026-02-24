@@ -24,17 +24,22 @@ pragma solidity 0.8.33;
  */
 //////////////////////////////////////////////////////////////*/
 
-import {
-    AccessManagerUpgradeable
-} from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagerUpgradeable.sol";
+import { AccessManagerUpgradeable } from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagerUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
+// AOXC Core Infrastructure
 import { AOXCStorage } from "./abstract/AOXCStorage.sol";
 import { AOXCConstants } from "./libraries/AOXCConstants.sol";
 import { AOXCErrors } from "./libraries/AOXCErrors.sol";
 
+/**
+ * @title AOXCSecurityRegistry
+ * @notice Centralized circuit breaker and federated security for AOXC Ecosystem.
+ * @dev Integrates with ERC-7201 storage and AOXC Global Constants.
+ */
 contract AOXCSecurityRegistry is Initializable, AccessManagerUpgradeable, UUPSUpgradeable, AOXCStorage {
+    
     /// @notice Quarantine expiration timestamps per Sub-DAO address.
     mapping(address => uint256) public quarantineExpiries;
 
@@ -55,20 +60,23 @@ contract AOXCSecurityRegistry is Initializable, AccessManagerUpgradeable, UUPSUp
     }
 
     /**
-     * @notice Initializes the security registry with the primary administrator.
-     * @param initialAdmin The initial administrator address for AccessManager.
+     * @notice Initializes the security registry.
+     * @param initialAdmin The DAO Governor address to manage roles.
+     * @dev 'override' specifier added to match AccessManagerUpgradeable.
      */
     function initialize(address initialAdmin) public override initializer {
         if (initialAdmin == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
+        
         __AccessManager_init(initialAdmin);
+        // NOT: OpenZeppelin V5+ UUPSUpgradeable içerisinde __UUPSUpgradeable_init() yoktur.
     }
 
     /*//////////////////////////////////////////////////////////////
-                        1. FEDERATED CIRCUIT BREAKER
+                        1. CIRCUIT BREAKERS
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Global Kill-Switch: Instantly halts all critical protocol operations.
+     * @notice Global Kill-Switch: Instantly halts the entire protocol.
      */
     function triggerGlobalEmergency() external {
         _checkAoxcRole(AOXCConstants.GUARDIAN_ROLE, msg.sender);
@@ -80,7 +88,7 @@ contract AOXCSecurityRegistry is Initializable, AccessManagerUpgradeable, UUPSUp
     }
 
     /**
-     * @notice Global Recovery: Re-enables the entire protocol after a lock.
+     * @notice Global Recovery: Re-enables the protocol.
      */
     function releaseGlobalEmergency() external {
         _checkAoxcRole(AOXCConstants.GOVERNANCE_ROLE, msg.sender);
@@ -92,15 +100,14 @@ contract AOXCSecurityRegistry is Initializable, AccessManagerUpgradeable, UUPSUp
     }
 
     /**
-     * @notice Automated Quarantine: Temporarily locks a Sub-DAO for safety.
-     * @dev SYNC FIX: Updated to _getNftStorage() to match V2 storage schema.
+     * @notice Automated Quarantine: Temporarily locks a specific Sub-DAO.
      */
     function triggerSubDaoQuarantine(address subDao, uint256 duration) external {
         if (subDao == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
 
-        // V2 Naming Sync
         uint256 callerRep = _getNftStorage().reputationPoints[msg.sender];
 
+        // Guardian değilse en az 500 itibar puanı gerekir
         if (callerRep < 500) {
             _checkAoxcRole(AOXCConstants.GUARDIAN_ROLE, msg.sender);
         }
@@ -125,31 +132,27 @@ contract AOXCSecurityRegistry is Initializable, AccessManagerUpgradeable, UUPSUp
     }
 
     /*//////////////////////////////////////////////////////////////
-                        2. SECURITY ANALYTICS (VIEW)
+                        2. ECOSYSTEM ANALYTICS
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Validation check for transaction permission across the ecosystem.
+     * @notice Permission check used by other contracts.
      */
-    function isAllowed(address _caller, address subDaoTarget) external view returns (bool) {
-        _caller; // Silence unused parameter
-
+    function isAllowed(address /* _caller */, address subDaoTarget) external view returns (bool) {
         if (_getMainStorage().isGlobalLockActive) return false;
-
-        if (subDaoEmergencyLocks[subDaoTarget]) {
-            return false;
+        
+        // Karantina süresi dolduysa kilidi görmezden gel
+        if (quarantineExpiries[subDaoTarget] > 0 && block.timestamp > quarantineExpiries[subDaoTarget]) {
+            return true; 
         }
 
-        return true;
+        return !subDaoEmergencyLocks[subDaoTarget];
     }
 
     /*//////////////////////////////////////////////////////////////
                             INTERNAL HELPERS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @dev Internal check for AOXC specific roles.
-     */
     function _checkAoxcRole(bytes32 roleName, address account) internal view {
         uint64 roleId = uint64(uint256(roleName));
         (bool isMember,) = hasRole(roleId, account);
@@ -158,15 +161,7 @@ contract AOXCSecurityRegistry is Initializable, AccessManagerUpgradeable, UUPSUp
         }
     }
 
-    /**
-     * @dev Authorizes a UUPS upgrade.
-     */
-    function _authorizeUpgrade(
-        address /* newImplementation */
-    )
-        internal
-        override
-    {
+    function _authorizeUpgrade(address) internal override {
         _checkAoxcRole(AOXCConstants.UPGRADER_ROLE, msg.sender);
     }
 

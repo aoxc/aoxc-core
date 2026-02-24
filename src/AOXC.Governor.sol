@@ -26,35 +26,27 @@ pragma solidity 0.8.33;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { GovernorUpgradeable } from "@openzeppelin/contracts-upgradeable/governance/GovernorUpgradeable.sol";
-import {
-    GovernorSettingsUpgradeable
-} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorSettingsUpgradeable.sol";
-import {
-    GovernorCountingSimpleUpgradeable
-} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorCountingSimpleUpgradeable.sol";
-import {
-    GovernorVotesUpgradeable
-} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesUpgradeable.sol";
-import {
-    GovernorVotesQuorumFractionUpgradeable
-} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesQuorumFractionUpgradeable.sol";
-import {
-    GovernorTimelockControlUpgradeable
-} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorTimelockControlUpgradeable.sol";
-import {
-    GovernorPreventLateQuorumUpgradeable
-} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorPreventLateQuorumUpgradeable.sol";
+import { GovernorSettingsUpgradeable } from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorSettingsUpgradeable.sol";
+import { GovernorCountingSimpleUpgradeable } from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorCountingSimpleUpgradeable.sol";
+import { GovernorVotesUpgradeable } from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesUpgradeable.sol";
+import { GovernorVotesQuorumFractionUpgradeable } from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesQuorumFractionUpgradeable.sol";
+import { GovernorTimelockControlUpgradeable } from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorTimelockControlUpgradeable.sol";
+import { GovernorPreventLateQuorumUpgradeable } from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorPreventLateQuorumUpgradeable.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import {
-    TimelockControllerUpgradeable
-} from "@openzeppelin/contracts-upgradeable/governance/TimelockControllerUpgradeable.sol";
+import { TimelockControllerUpgradeable } from "@openzeppelin/contracts-upgradeable/governance/TimelockControllerUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
+// AOXC Core Infrastructure
 import { AOXCConstants } from "./libraries/AOXCConstants.sol";
 import { AOXCErrors } from "./libraries/AOXCErrors.sol";
 import { AOXCStorage } from "./abstract/AOXCStorage.sol";
 
+/**
+ * @title AOXCGovernor
+ * @notice The sovereign governance engine for the AOXC Protocol.
+ * @dev Integrates with ERC-7201 storage and AOXC Global Libraries.
+ */
 contract AOXCGovernor is
     Initializable,
     GovernorUpgradeable,
@@ -76,9 +68,11 @@ contract AOXCGovernor is
         uint256 activeProposalLimit;
     }
 
+    // --- Legacy Physical Storage ---
     mapping(address => SubDaoPrivileges) public subDaoRegistry;
     uint256 public reputationThreshold;
 
+    // --- Events ---
     event SubDaoAuthorized(address indexed subDao, bool canIssueAssets, uint256 limit);
     event ReputationThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
 
@@ -88,19 +82,24 @@ contract AOXCGovernor is
     }
 
     /**
-     * @notice Initializes the governor with tokens and timelock.
+     * @notice Initializes the sovereign governor.
      */
-    function initialize(IVotes _token, TimelockControllerUpgradeable _timelock, address guardianAddr)
-        external
-        initializer
-    {
+    function initialize(
+        IVotes _token, 
+        TimelockControllerUpgradeable _timelock, 
+        address guardianAddr
+    ) external initializer {
         if (guardianAddr == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
 
         __Governor_init("AOXC Sovereign DAO");
-        __GovernorSettings_init(uint48(AOXCConstants.MIN_VOTING_DELAY), uint32(AOXCConstants.MAX_VOTING_PERIOD), 0);
+        __GovernorSettings_init(
+            uint48(AOXCConstants.MIN_VOTING_DELAY), 
+            uint32(AOXCConstants.MAX_VOTING_PERIOD), 
+            0
+        );
         __GovernorCountingSimple_init();
         __GovernorVotes_init(_token);
-        __GovernorVotesQuorumFraction_init(4);
+        __GovernorVotesQuorumFraction_init(4); // %4 Quorum
         __GovernorTimelockControl_init(_timelock);
         __GovernorPreventLateQuorum_init(uint48(AOXCConstants.MIN_VOTING_DELAY));
         __AccessControl_init();
@@ -108,6 +107,7 @@ contract AOXCGovernor is
         _grantRole(DEFAULT_ADMIN_ROLE, guardianAddr);
         _grantRole(AOXCConstants.GUARDIAN_ROLE, guardianAddr);
         _grantRole(AOXCConstants.UPGRADER_ROLE, guardianAddr);
+        _grantRole(AOXCConstants.GOVERNANCE_ROLE, address(this)); // DAO itself has Governance Role
 
         reputationThreshold = 1000;
     }
@@ -116,23 +116,16 @@ contract AOXCGovernor is
                         CLOCK VIRTUALS (SOLC 0.8.33)
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @dev FIX: Removed 'override' keyword to solve Error (7792).
-     * Solc 0.8.33 sees this as a new function definition in current OZ versions.
-     */
     function clockMode() public pure returns (string memory) {
         return "mode=timestamp";
     }
 
-    /**
-     * @dev Explicitly overriding Governor and Votes modules for block.timestamp.
-     */
     function clock() public view override(GovernorUpgradeable, GovernorVotesUpgradeable) returns (uint48) {
         return uint48(block.timestamp);
     }
 
     /*//////////////////////////////////////////////////////////////
-                            DAO LOGIC
+                            DAO & SUB-DAO LOGIC
     //////////////////////////////////////////////////////////////*/
 
     function authorizeSubDao(
@@ -152,6 +145,7 @@ contract AOXCGovernor is
             activeProposalLimit: proposalLimit
         });
 
+        // Register in Namespaced Storage for global access
         MainStorage storage $ = _getMainStorage();
         $.dynamicAddresses[keccak256(abi.encodePacked("SUB_DAO", subDaoContract))] = subDaoContract;
 
@@ -169,7 +163,7 @@ contract AOXCGovernor is
         bytes[] memory calldatas,
         string memory description
     ) public override(GovernorUpgradeable) returns (uint256) {
-        // V2 Storage naming fix
+        // Reputation check from Namespaced NFT Storage
         uint256 callerRep = _getNftStorage().reputationPoints[msg.sender];
 
         if (callerRep < reputationThreshold) {
@@ -200,102 +194,47 @@ contract AOXCGovernor is
         return super.votingPeriod();
     }
 
-    function quorum(uint256 blockNumber)
-        public
-        view
-        override(GovernorUpgradeable, GovernorVotesQuorumFractionUpgradeable)
-        returns (uint256)
-    {
+    function quorum(uint256 blockNumber) public view override(GovernorUpgradeable, GovernorVotesQuorumFractionUpgradeable) returns (uint256) {
         return super.quorum(blockNumber);
     }
 
-    function state(uint256 proposalId)
-        public
-        view
-        override(GovernorUpgradeable, GovernorTimelockControlUpgradeable)
-        returns (ProposalState)
-    {
+    function state(uint256 proposalId) public view override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (ProposalState) {
         return super.state(proposalId);
     }
 
-    function proposalNeedsQueuing(uint256 proposalId)
-        public
-        view
-        override(GovernorUpgradeable, GovernorTimelockControlUpgradeable)
-        returns (bool)
-    {
+    function proposalNeedsQueuing(uint256 proposalId) public view override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (bool) {
         return super.proposalNeedsQueuing(proposalId);
     }
 
-    function proposalThreshold()
-        public
-        view
-        override(GovernorUpgradeable, GovernorSettingsUpgradeable)
-        returns (uint256)
-    {
+    function proposalThreshold() public view override(GovernorUpgradeable, GovernorSettingsUpgradeable) returns (uint256) {
         return super.proposalThreshold();
     }
 
-    function proposalDeadline(uint256 proposalId)
-        public
-        view
-        override(GovernorUpgradeable, GovernorPreventLateQuorumUpgradeable)
-        returns (uint256)
-    {
+    function proposalDeadline(uint256 proposalId) public view override(GovernorUpgradeable, GovernorPreventLateQuorumUpgradeable) returns (uint256) {
         return super.proposalDeadline(proposalId);
     }
 
-    function _tallyUpdated(uint256 proposalId)
-        internal
-        override(GovernorUpgradeable, GovernorPreventLateQuorumUpgradeable)
-    {
+    function _tallyUpdated(uint256 proposalId) internal override(GovernorUpgradeable, GovernorPreventLateQuorumUpgradeable) {
         super._tallyUpdated(proposalId);
     }
 
-    function _executeOperations(
-        uint256 proposalId,
-        address[] memory targets,
-        uint256[] memory values,
-        bytes[] memory calldatas,
-        bytes32 descriptionHash
-    ) internal override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) {
+    function _executeOperations(uint256 proposalId, address[] memory targets, uint256[] memory values, bytes[] memory calldatas, bytes32 descriptionHash) internal override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) {
         super._executeOperations(proposalId, targets, values, calldatas, descriptionHash);
     }
 
-    function _queueOperations(
-        uint256 proposalId,
-        address[] memory targets,
-        uint256[] memory values,
-        bytes[] memory calldatas,
-        bytes32 descriptionHash
-    ) internal override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (uint48) {
+    function _queueOperations(uint256 proposalId, address[] memory targets, uint256[] memory values, bytes[] memory calldatas, bytes32 descriptionHash) internal override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (uint48) {
         return super._queueOperations(proposalId, targets, values, calldatas, descriptionHash);
     }
 
-    function _cancel(
-        address[] memory targets,
-        uint256[] memory values,
-        bytes[] memory calldatas,
-        bytes32 descriptionHash
-    ) internal override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (uint256) {
+    function _cancel(address[] memory targets, uint256[] memory values, bytes[] memory calldatas, bytes32 descriptionHash) internal override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (uint256) {
         return super._cancel(targets, values, calldatas, descriptionHash);
     }
 
-    function _executor()
-        internal
-        view
-        override(GovernorUpgradeable, GovernorTimelockControlUpgradeable)
-        returns (address)
-    {
+    function _executor() internal view override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (address) {
         return super._executor();
     }
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(GovernorUpgradeable, AccessControlUpgradeable)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view override(GovernorUpgradeable, AccessControlUpgradeable) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 

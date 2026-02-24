@@ -31,17 +31,23 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+// AOXC Core Infrastructure
 import { AOXCStorage } from "./abstract/AOXCStorage.sol";
 import { AOXCConstants } from "./libraries/AOXCConstants.sol";
 import { AOXCErrors } from "./libraries/AOXCErrors.sol";
 
 /**
  * @title AOXCBridge
- * @author AOXCAN AI & Orcun
  * @notice High-performance cross-chain gateway for AOXC with Sub-DAO rate limiting.
- * @dev ReentrancyGuard is baked-in to avoid dependency issues with OZ V5.
+ * @dev Optimized with wrapped ReentrancyGuard logic and Namespaced Storage (ERC-7201).
  */
-contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradeable, UUPSUpgradeable, AOXCStorage {
+contract AOXCBridge is 
+    Initializable, 
+    AccessControlUpgradeable, 
+    PausableUpgradeable, 
+    UUPSUpgradeable, 
+    AOXCStorage 
+{
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
@@ -53,7 +59,7 @@ contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradea
     uint256 private _status;
 
     /**
-     * @dev LINT FIX: Logic wrapped in internal functions to reduce contract size.
+     * @dev Reentrancy protection wrapped into internal functions to minimize bytecode.
      */
     modifier nonReentrant() {
         _nonReentrantBefore();
@@ -61,12 +67,12 @@ contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradea
         _nonReentrantAfter();
     }
 
-    function _nonReentrantBefore() internal virtual {
+    function _nonReentrantBefore() internal {
         if (_status == _ENTERED) revert AOXCErrors.AOXC_CustomRevert("ReentrancyGuard: reentrant call");
         _status = _ENTERED;
     }
 
-    function _nonReentrantAfter() internal virtual {
+    function _nonReentrantAfter() internal {
         _status = _NOT_ENTERED;
     }
 
@@ -89,9 +95,7 @@ contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradea
                                 EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    event SentToChain(
-        uint16 indexed dstChainId, address indexed from, address indexed to, uint256 amount, bool prioritized
-    );
+    event SentToChain(uint16 indexed dstChainId, address indexed from, address indexed to, uint256 amount, bool prioritized);
     event ReceivedFromChain(uint16 indexed srcChainId, address indexed to, uint256 amount, bytes32 indexed messageId);
     event SubDaoPassUpdated(address indexed subDao, bool priority, uint256 dailyLimit);
 
@@ -104,12 +108,15 @@ contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradea
         _disableInitializers();
     }
 
+    /**
+     * @notice Initializes the bridge with security roles and the bridgeable token.
+     */
     function initialize(address governor, address guardian, address token) external initializer {
         if (governor == address(0) || token == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
 
         __AccessControl_init();
         __Pausable_init();
-
+        
         _status = _NOT_ENTERED;
         _aoxcToken = IERC20(token);
 
@@ -123,8 +130,12 @@ contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradea
                             BRIDGE OPERATIONS
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @notice Initiates a bridge-out request with Sub-DAO rate limit checking.
+     */
     function bridgeOut(uint16 dstChainId, address to, uint256 amount) external whenNotPaused nonReentrant {
         if (amount == 0) revert AOXCErrors.AOXC_ZeroAmount();
+        if (to == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
 
         BridgeStorage storage $ = _getBridgeStorage();
         if (!$.supportedChains[dstChainId]) revert AOXCErrors.AOXC_ChainNotSupported(uint256(dstChainId));
@@ -138,7 +149,7 @@ contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradea
                 pass.lastUpdate = block.timestamp;
             }
             if (pass.currentVolume + amount > pass.dailyLimit) {
-                revert AOXCErrors.AOXC_ThresholdNotMet(pass.currentVolume + amount, pass.dailyLimit);
+                revert AOXCErrors.AOXC_BridgeLimitExceeded(amount, pass.dailyLimit);
             }
             pass.currentVolume += amount;
             isPrioritized = pass.hasPriority;
@@ -148,17 +159,23 @@ contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradea
         emit SentToChain(dstChainId, msg.sender, to, amount, isPrioritized);
     }
 
+    /**
+     * @notice Finalizes a bridge-in transaction. Only executable by authorized BRIDGE_ROLE.
+     */
     function bridgeIn(uint16 srcChainId, address to, uint256 amount, bytes32 messageId)
         external
         onlyRole(AOXCConstants.BRIDGE_ROLE)
         whenNotPaused
         nonReentrant
     {
+        if (to == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
+        
         BridgeStorage storage $ = _getBridgeStorage();
         if ($.processedMessages[messageId]) revert AOXCErrors.AOXC_BridgeTxAlreadyProcessed(messageId);
 
         $.processedMessages[messageId] = true;
         _aoxcToken.safeTransfer(to, amount);
+        
         emit ReceivedFromChain(srcChainId, to, amount, messageId);
     }
 
@@ -166,14 +183,21 @@ contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradea
                             ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function setSubDaoPass(address subDao, bool priority, uint256 limit)
-        external
-        onlyRole(AOXCConstants.GOVERNANCE_ROLE)
-    {
+    function setSubDaoPass(address subDao, bool priority, uint256 limit) external onlyRole(AOXCConstants.GOVERNANCE_ROLE) {
         if (subDao == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
-        subDaoPasses[subDao] =
-            SubDaoPass({ hasPriority: priority, dailyLimit: limit, currentVolume: 0, lastUpdate: block.timestamp });
+        
+        subDaoPasses[subDao] = SubDaoPass({
+            hasPriority: priority,
+            dailyLimit: limit,
+            currentVolume: 0,
+            lastUpdate: block.timestamp
+        });
+        
         emit SubDaoPassUpdated(subDao, priority, limit);
+    }
+
+    function setChainSupport(uint16 chainId, bool status) external onlyRole(AOXCConstants.GOVERNANCE_ROLE) {
+        _getBridgeStorage().supportedChains[chainId] = status;
     }
 
     function pause() external onlyRole(AOXCConstants.GUARDIAN_ROLE) {
@@ -190,9 +214,5 @@ contract AOXCBridge is Initializable, AccessControlUpgradeable, PausableUpgradea
 
     function _authorizeUpgrade(address) internal override onlyRole(AOXCConstants.UPGRADER_ROLE) { }
 
-    /**
-     * @dev LINT FIX: Renamed to mixedCase _gap.
-     * Gap size 47 accounts for _status slot.
-     */
     uint256[47] private _gap;
 }

@@ -30,15 +30,15 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+// AOXC Core Infrastructure
 import { AOXCStorage } from "./abstract/AOXCStorage.sol";
 import { AOXCConstants } from "./libraries/AOXCConstants.sol";
 import { AOXCErrors } from "./libraries/AOXCErrors.sol";
 
 /**
- * @title AOXC Staking (Core V2.6)
- * @author AOXC Protocol Team
- * @notice Reputation-based staking mechanism with lock durations.
- * @dev Optimized for Sovereign V3 Storage Schema and Zero Linter Warnings.
+ * @title AOXCStaking
+ * @notice Reputation-based staking mechanism for the AOXC Sovereign Protocol.
+ * @dev Optimized for V2.6 Namespaced Storage and Zero Linter Warnings.
  */
 contract AOXCStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable, AOXCStorage {
     using SafeERC20 for IERC20;
@@ -51,18 +51,21 @@ contract AOXCStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     uint256 private constant _ENTERED = 2;
     uint256 private _status;
 
+    /**
+     * @dev Reentrancy protection logic wrapped in internal functions to reduce bytecode size.
+     */
     modifier nonReentrant() {
         _nonReentrantBefore();
         _;
         _nonReentrantAfter();
     }
 
-    function _nonReentrantBefore() internal virtual {
+    function _nonReentrantBefore() internal {
         if (_status == _ENTERED) revert AOXCErrors.AOXC_CustomRevert("ReentrancyGuard: reentrant call");
         _status = _ENTERED;
     }
 
-    function _nonReentrantAfter() internal virtual {
+    function _nonReentrantAfter() internal {
         _status = _NOT_ENTERED;
     }
 
@@ -77,7 +80,7 @@ contract AOXCStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
                                 EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    event Staked(address indexed user, uint256 amount, uint256 lockDuration);
+    event Staked(address indexed user, uint256 amount, uint256 lockDuration, uint256 index);
     event Unstaked(address indexed user, uint256 amount, bool early);
     event StrategyUpdated(address indexed newStrategy);
 
@@ -90,11 +93,6 @@ contract AOXCStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         _disableInitializers();
     }
 
-    /**
-     * @notice Initializes the staking engine.
-     * @param governor The address of the DAO governor.
-     * @param token The ERC20 token to be staked.
-     */
     function initialize(address governor, address token) external initializer {
         if (governor == address(0) || token == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
 
@@ -109,13 +107,11 @@ contract AOXCStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     /*//////////////////////////////////////////////////////////////
-                            BRIDGE OPERATIONS
+                            STAKING LOGIC
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Stakes tokens to gain reputation points.
-     * @param amount Token amount.
-     * @param duration Lock duration in seconds.
+     * @notice Stakes tokens to gain reputation points based on time-weighted lock.
      */
     function stake(uint256 amount, uint256 duration) external nonReentrant {
         if (amount == 0) revert AOXCErrors.AOXC_ZeroAmount();
@@ -126,22 +122,25 @@ contract AOXCStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
         _stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
+        uint256 currentIndex = $.userStakes[msg.sender].length;
         $.userStakes[msg.sender].push(
             AOXCStorage.StakePosition({
-                amount: amount, startTime: block.timestamp, lockDuration: duration, active: true
+                amount: amount,
+                startTime: block.timestamp,
+                lockDuration: duration,
+                active: true
             })
         );
 
-        // Reputation calculation: (amount * duration) / year
+        // Reputation calculation: (amount * duration) / 1 Year
         uint256 repGained = (amount * duration) / AOXCConstants.ONE_YEAR;
         nft.reputationPoints[msg.sender] += repGained;
 
-        emit Staked(msg.sender, amount, duration);
+        emit Staked(msg.sender, amount, duration, currentIndex);
     }
 
     /**
-     * @notice Withdraws staked tokens and reduces reputation.
-     * @param index The index of the stake position in userStakes mapping.
+     * @notice Withdraws staked tokens and burns associated reputation after lock expiry.
      */
     function withdraw(uint256 index) external nonReentrant {
         StakingStorage storage $ = _getStakingStorage();
@@ -152,10 +151,12 @@ contract AOXCStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         AOXCStorage.StakePosition storage s = $.userStakes[msg.sender][index];
         if (!s.active) revert AOXCErrors.AOXC_StakeNotActive();
 
-        bool isEarly = block.timestamp < (s.startTime + s.lockDuration);
+        if (block.timestamp < (s.startTime + s.lockDuration)) {
+            revert AOXCErrors.AOXC_StakeStillLocked(block.timestamp, s.startTime + s.lockDuration);
+        }
+
         uint256 repLost = (s.amount * s.lockDuration) / AOXCConstants.ONE_YEAR;
 
-        // Reputation Burn Logic
         if (nft.reputationPoints[msg.sender] > repLost) {
             nft.reputationPoints[msg.sender] -= repLost;
         } else {
@@ -166,16 +167,13 @@ contract AOXCStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         uint256 amountToReturn = s.amount;
 
         _stakingToken.safeTransfer(msg.sender, amountToReturn);
-        emit Unstaked(msg.sender, amountToReturn, isEarly);
+        emit Unstaked(msg.sender, amountToReturn, false);
     }
 
     /*//////////////////////////////////////////////////////////////
                             ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Updates the strategy for staking rewards.
-     */
     function setRewardStrategy(address _strategy) external onlyRole(AOXCConstants.GOVERNANCE_ROLE) {
         if (_strategy == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
         rewardStrategy = _strategy;
@@ -188,8 +186,5 @@ contract AOXCStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
     function _authorizeUpgrade(address) internal override onlyRole(AOXCConstants.UPGRADER_ROLE) { }
 
-    /**
-     * @dev Gap size 47 accounts for _status slot usage.
-     */
     uint256[47] private _gap;
 }

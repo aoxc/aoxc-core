@@ -27,10 +27,18 @@ pragma solidity 0.8.33;
 import {
     TimelockControllerUpgradeable
 } from "@openzeppelin/contracts-upgradeable/governance/TimelockControllerUpgradeable.sol";
+
+// AOXC Core Infrastructure
 import { AOXCConstants } from "./libraries/AOXCConstants.sol";
 import { AOXCErrors } from "./libraries/AOXCErrors.sol";
 
+/**
+ * @title AOXCTimelock
+ * @notice Enforces a delay between proposal success and execution.
+ * @dev Features dynamic delays for Sub-DAOs and Guardian intervention.
+ */
 contract AOXCTimelock is TimelockControllerUpgradeable {
+    
     /// @notice Custom minimum delays for specific Sub-DAO addresses.
     mapping(address => uint256) public subDaoMinDelays;
 
@@ -43,47 +51,62 @@ contract AOXCTimelock is TimelockControllerUpgradeable {
 
     /**
      * @notice Initializes the Timelock controller.
-     * @dev FIX Error (9456): Added 'override' specifier to match the virtual function in base contract.
+     * @param minDelay Minimum time (in seconds) an operation must wait.
+     * @param proposers List of addresses allowed to propose.
+     * @param executors List of addresses allowed to execute.
+     * @param admin Admin address for the timelock.
      */
-    function initialize(uint256 minDelay, address[] memory proposers, address[] memory executors, address admin)
-        public
-        override
-        initializer
-    {
+    function initialize(
+        uint256 minDelay, 
+        address[] memory proposers, 
+        address[] memory executors, 
+        address admin
+    ) public override initializer {
         if (admin == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
+        
+        // Base OpenZeppelin initialization
         __TimelockController_init(minDelay, proposers, executors, admin);
     }
 
     /**
-     * @notice Allows the admin to set a custom minimum delay for specific Sub-DAOs.
-     * @param subDao The address of the Sub-DAO contract.
-     * @param newDelay The new delay duration in seconds.
+     * @notice Sets a custom delay for specific Sub-DAOs.
+     * @dev Allows governance to speed up or slow down specific department actions.
      */
     function setSubDaoMinDelay(address subDao, uint256 newDelay) external {
         _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        if (subDao == address(0)) revert AOXCErrors.AOXC_InvalidAddress();
+        
         subDaoMinDelays[subDao] = newDelay;
         emit SubDaoDelayUpdated(subDao, newDelay);
     }
 
     /**
-     * @notice Returns the minimum delay. Priority given to Sub-DAO custom delays.
+     * @notice Dynamic delay fetcher. 
+     * @dev Overrides base to check for Sub-DAO specific requirements first.
      */
     function getMinDelay() public view override returns (uint256) {
-        if (subDaoMinDelays[msg.sender] > 0) {
-            return subDaoMinDelays[msg.sender];
+        uint256 customDelay = subDaoMinDelays[msg.sender];
+        if (customDelay > 0) {
+            return customDelay;
         }
         return super.getMinDelay();
     }
 
     /**
-     * @notice Guardian emergency cancellation of any pending operation.
-     * @param id The operation identifier to cancel.
+     * @notice Emergency cancellation for the Guardian.
+     * @dev Prevents malicious or erroneous operations from executing.
      */
     function guardianCancel(bytes32 id) external {
+        // Accessing AOXC Guardian Role from global constants
         _checkRole(AOXCConstants.GUARDIAN_ROLE, msg.sender);
+        
+        if (!isOperationPending(id)) revert AOXCErrors.AOXC_CustomRevert("Timelock: Not pending");
+        
         cancel(id);
     }
 
-    /// @dev Storage gap for future upgrades.
+    /**
+     * @dev Storage gap for future upgrades (keeps logic slots safe).
+     */
     uint256[47] private _gap;
 }
